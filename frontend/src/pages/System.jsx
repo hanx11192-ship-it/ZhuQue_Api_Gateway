@@ -4,6 +4,7 @@ import {
   Descriptions,
   Form,
   Input,
+  InputNumber,
   Message,
   Modal,
   Popconfirm,
