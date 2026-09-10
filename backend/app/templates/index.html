@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>脚本 API 网关</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --line: #2a3a4d;
+      --text: #e7eef7;
+      --muted: #8aa0b8;
+      --acc: #3d8bfd;
+      --ok: #3dd68c;
+      --bad: #ff6b6b;
+      --warn: #f5c542;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--line);
+      background: #121a24;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    h1 { font-size: 16px; margin: 0; letter-spacing: 0.04em; }
+    nav { display: flex; gap: 8px; flex-wrap: wrap; }
+    nav button, .btn {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    nav button.active, .btn.primary {
+      background: var(--acc);
+      color: #fff;
+      border-color: var(--acc);
+    }
+    .btn.danger { border-color: var(--bad); color: var(--bad); }
+    .btn.ok { border-color: var(--ok); color: var(--ok); }
+    main { padding: 18px 20px 40px; max-width: 1200px; margin: 0 auto; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .muted { color: var(--muted); font-size: 12px; }
+    .num { font-size: 28px; font-weight: 700; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    input, textarea, select {
+      width: 100%;
+      background: #0f1722;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 4px 0 10px;
+    }
+    label { font-size: 12px; color: var(--muted); display: block; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hidden { display: none; }
+    .toast {
+      position: fixed; right: 16px; bottom: 16px;
+      background: #223;
+      border: 1px solid var(--line);
+      padding: 10px 14px;
+      border-radius: 8px;
+      max-width: 420px;
+      white-space: pre-wrap;
+    }
+    .login {
+      max-width: 360px; margin: 12vh auto; padding: 24px;
+    }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+    pre {
+      background: #0b1118;
+      padding: 12px;
+      border-radius: 8px;
+      overflow: auto;
+    }
+    .tag { font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--line); }
+    .tag.on { color: var(--ok); border-color: var(--ok); }
+    .tag.off { color: var(--bad); border-color: var(--bad); }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    @media (max-width: 720px) { .row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div id="login-view" class="card login hidden">
+    <h1>登录管理面板</h1>
+    <p class="muted">默认账号看环境变量 ADMIN_USER / ADMIN_PASSWORD</p>
+    <label>用户名</label>
+    <input id="login-user" value="admin" />
+    <label>密码</label>
+    <input id="login-pass" type="password" />
+    <button class="btn primary" onclick="doLogin()">登录</button>
+  </div>
+
+  <div id="app-view" class="hidden">
+    <header>
+      <h1>脚本 API 网关</h1>
+      <nav>
+        <button data-tab="dash" class="active" onclick="showTab('dash')">总览</button>
+        <button data-tab="eps" onclick="showTab('eps')">接口</button>
+        <button data-tab="keys" onclick="showTab('keys')">密钥</button>
+        <button data-tab="logs" onclick="showTab('logs')">调用记录</button>
+        <button data-tab="settings" onclick="showTab('settings')">限制</button>
+        <button data-tab="docs" onclick="showTab('docs')">调用说明</button>
+        <button onclick="doLogout()">退出</button>
+      </nav>
+    </header>
+    <main>
+      <section id="tab-dash">
+        <div class="grid" id="stats"></div>
+        <div class="card" style="margin-top:14px">
+          <div class="muted">近 24 小时按接口</div>
+          <table><thead><tr><th>slug</th><th>调用</th><th>失败</th></tr></thead><tbody id="by-ep"></tbody></table>
+        </div>
+      </section>
+
+      <section id="tab-eps" class="hidden">
+        <div class="card">
+          <strong>上传脚本注册</strong>
+          <div class="row">
+            <div><label>slug</label><input id="up-slug" placeholder="hello" /></div>
+            <div><label>名称</label><input id="up-name" placeholder="示例" /></div>
+          </div>
+          <div class="row">
+            <div><label>超时秒</label><input id="up-timeout" type="number" value="30" /></div>
+            <div><label>每分钟次数</label><input id="up-rate" type="number" value="60" /></div>
+          </div>
+          <div class="row">
+            <div><label>并发</label><input id="up-cc" type="number" value="2" /></div>
+            <div><label>HTTP 方法</label><input id="up-methods" value="GET,POST" /></div>
+          </div>
+          <label>IP 白名单（空=不限制，每行一个 IP 或 CIDR）</label>
+          <textarea id="up-allow" rows="2"></textarea>
+          <label>IP 黑名单</label>
+          <textarea id="up-deny" rows="2"></textarea>
+          <label>脚本文件 .py / .js</label>
+          <input id="up-file" type="file" accept=".py,.js" />
+          <button class="btn primary" onclick="uploadEp()">上传并创建</button>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <strong>绑定本机路径</strong>
+          <div class="row">
+            <div><label>slug</label><input id="path-slug" /></div>
+            <div><label>绝对路径</label><input id="path-file" placeholder="/root/zhuque/scripts/foo.py" /></div>
+          </div>
+          <button class="btn" onclick="pathEp()">按路径注册</button>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <strong>已注册接口</strong>
+          <div id="ep-list"></div>
+        </div>
+      </section>
+
+      <section id="tab-keys" class="hidden">
+        <div class="card">
+          <strong>新建 API Key</strong>
+          <div class="row">
+            <div><label>名称</label><input id="key-name" value="default" /></div>
+            <div><label>每分钟次数</label><input id="key-rate" type="number" value="120" /></div>
+          </div>
+          <label>允许的 slug（空=全部，逗号或换行分隔）</label>
+          <textarea id="key-slugs" rows="2"></textarea>
+          <label>IP 白名单</label>
+          <textarea id="key-allow" rows="2"></textarea>
+          <button class="btn primary" onclick="createKey()">生成密钥</button>
+          <pre id="key-secret" class="hidden"></pre>
+        </div>
+        <div class="card" style="margin-top:12px" id="key-list"></div>
+      </section>
+
+      <section id="tab-logs" class="hidden">
+        <div class="card">
+          <label>按 slug 过滤</label>
+          <input id="log-slug" onchange="loadLogs()" placeholder="留空=全部" />
+          <table>
+            <thead><tr><th>时间</th><th>slug</th><th>IP</th><th>状态</th><th>耗时</th><th>错误</th><th>摘要</th></tr></thead>
+            <tbody id="log-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="tab-settings" class="hidden">
+        <div class="card">
+          <label>全局最大并发</label>
+          <input id="set-cc" type="number" />
+          <label>全局 IP 黑名单</label>
+          <textarea id="set-deny" rows="4"></textarea>
+          <button class="btn primary" onclick="saveSettings()">保存</button>
+        </div>
+      </section>
+
+      <section id="tab-docs" class="hidden">
+        <div class="card">
+          <pre id="docs-box"></pre>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div id="toast" class="toast hidden"></div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    function toast(msg) {
+      const el = $("toast");
+      el.textContent = typeof msg === "string" ? msg : JSON.stringify(msg, null, 2);
+      el.classList.remove("hidden");
+      setTimeout(() => el.classList.add("hidden"), 5000);
+    }
+    async function api(url, opts={}) {
+      const res = await fetch(url, { credentials: "include", ...opts });
+      const data = await res.json().catch(() => ({ ok:false, error:"bad_json" }));
+      if (!res.ok && res.status === 401 && url !== "/admin/login") {
+        showLogin();
+      }
+      return { res, data };
+    }
+    function showLogin() {
+      $("login-view").classList.remove("hidden");
+      $("app-view").classList.add("hidden");
+    }
+    function showApp() {
+      $("login-view").classList.add("hidden");
+      $("app-view").classList.remove("hidden");
+    }
+    async function doLogin() {
+      const { data } = await api("/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: $("login-user").value, password: $("login-pass").value })
+      });
+      if (!data.ok) { toast(data.error || "登录失败"); return; }
+      showApp();
+      refreshAll();
+    }
+    async function doLogout() {
+      await api("/admin/logout", { method: "POST" });
+      showLogin();
+    }
+    function showTab(name) {
+      document.querySelectorAll("nav button[data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+      ["dash","eps","keys","logs","settings","docs"].forEach(t => {
+        $("tab-" + t).classList.toggle("hidden", t !== name);
+      });
+      if (name === "dash") loadOverview();
+      if (name === "eps") loadEps();
+      if (name === "keys") loadKeys();
+      if (name === "logs") loadLogs();
+      if (name === "settings") loadSettings();
+      if (name === "docs") loadDocs();
+    }
+    async function loadOverview() {
+      const { data } = await api("/admin/overview");
+      if (!data.ok) return;
+      const d = data.data;
+      $("stats").innerHTML = [
+        ["24h 调用", d.total],
+        ["成功", d.success],
+        ["失败", d.fail],
+        ["429", d.rate429],
+        ["403", d.deny403],
+        ["平均 ms", d.avg_ms],
+        ["接口数", d.endpoint_count],
+        ["密钥数", d.key_count],
+        ["当前并发", d.runtime.running_global],
+      ].map(([k,v]) => `<div class="card"><div class="muted">${k}</div><div class="num">${v}</div></div>`).join("");
+      $("by-ep").innerHTML = (d.by_endpoint || []).map(r => `<tr><td>${r.slug||"-"}</td><td>${r.calls}</td><td>${r.fail}</td></tr>`).join("");
+    }
+    async function loadEps() {
+      const { data } = await api("/admin/endpoints");
+      if (!data.ok) return;
+      $("ep-list").innerHTML = data.data.map(ep => `
+        <div class="card" style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <div>
+              <strong>/${ep.slug}</strong>
+              <span class="tag ${ep.enabled ? "on":"off"}">${ep.enabled ? "启用":"停用"}</span>
+              <span class="tag">${ep.lang}</span>
+              <div class="muted">${ep.path}</div>
+            </div>
+            <div class="actions">
+              <button class="btn" onclick="toggleEp(${ep.id}, ${ep.enabled ? 0 : 1})">${ep.enabled ? "停用":"启用"}</button>
+              <button class="btn" onclick="tryEp(${ep.id})">试运行</button>
+              <button class="btn danger" onclick="delEp(${ep.id})">删除</button>
+            </div>
+          </div>
+          <div class="row">
+            <div><label>超时</label><input id="ep-t-${ep.id}" value="${ep.timeout_sec}" /></div>
+            <div><label>每分钟</label><input id="ep-r-${ep.id}" value="${ep.rate_per_min}" /></div>
+          </div>
+          <div class="row">
+            <div><label>并发</label><input id="ep-c-${ep.id}" value="${ep.concurrency}" /></div>
+            <div><label>方法</label><input id="ep-m-${ep.id}" value="${ep.http_methods}" /></div>
+          </div>
+          <label>IP 白名单</label><textarea id="ep-a-${ep.id}" rows="2">${ep.ip_allow||""}</textarea>
+          <label>IP 黑名单</label><textarea id="ep-d-${ep.id}" rows="2">${ep.ip_deny||""}</textarea>
+          <button class="btn ok" onclick="saveEp(${ep.id})">保存策略</button>
+        </div>`).join("") || "<p class='muted'>还没有接口</p>";
+    }
+    async function uploadEp() {
+      const f = $("up-file").files[0];
+      if (!f) { toast("先选文件"); return; }
+      const fd = new FormData();
+      fd.append("slug", $("up-slug").value);
+      fd.append("name", $("up-name").value);
+      fd.append("timeout_sec", $("up-timeout").value);
+      fd.append("rate_per_min", $("up-rate").value);
+      fd.append("concurrency", $("up-cc").value);
+      fd.append("http_methods", $("up-methods").value);
+      fd.append("ip_allow", $("up-allow").value);
+      fd.append("ip_deny", $("up-deny").value);
+      fd.append("file", f);
+      const { data } = await api("/admin/endpoints/upload", { method: "POST", body: fd });
+      toast(data.ok ? "已创建 " + data.data.slug : (data.error || data.detail));
+      loadEps();
+    }
+    async function pathEp() {
+      const { data } = await api("/admin/endpoints/path", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slug: $("path-slug").value,
+          path: $("path-file").value,
+          timeout_sec: 30,
+          rate_per_min: 60,
+          concurrency: 2
+        })
+      });
+      toast(data.ok ? "已注册" : (data.error || data.detail));
+      loadEps();
+    }
+    async function saveEp(id) {
+      const { data } = await api("/admin/endpoints/" + id, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          timeout_sec: $("ep-t-" + id).value,
+          rate_per_min: $("ep-r-" + id).value,
+          concurrency: $("ep-c-" + id).value,
+          http_methods: $("ep-m-" + id).value,
+          ip_allow: $("ep-a-" + id).value,
+          ip_deny: $("ep-d-" + id).value
+        })
+      });
+      toast(data.ok ? "已保存" : (data.error || data.detail));
+    }
+    async function toggleEp(id, enabled) {
+      await api("/admin/endpoints/" + id, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled })
+      });
+      loadEps();
+    }
+    async function delEp(id) {
+      if (!confirm("删除该接口？")) return;
+      await api("/admin/endpoints/" + id, { method: "DELETE" });
+      loadEps();
+    }
+    async function tryEp(id) {
+      const payload = prompt("JSON payload", "{}");
+      if (payload === null) return;
+      let obj = {};
+      try { obj = JSON.parse(payload); } catch { toast("JSON 无效"); return; }
+      const { data } = await api("/admin/endpoints/" + id + "/try", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payload: obj })
+      });
+      toast(JSON.stringify(data.data || data, null, 2));
+    }
+    async function loadKeys() {
+      const { data } = await api("/admin/keys");
+      if (!data.ok) return;
+      $("key-list").innerHTML = "<strong>已有密钥</strong>" + data.data.map(k => `
+        <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px">
+          <div><strong>${k.name}</strong> <span class="tag">${k.key_prefix}...</span>
+            <span class="tag ${k.enabled?"on":"off"}">${k.enabled?"启用":"停用"}</span>
+          </div>
+          <div class="muted">每分钟 ${k.rate_per_min} · 允许 slug: ${(k.endpoint_slugs||[]).join(",") || "全部"}</div>
+          <div class="actions" style="margin-top:6px">
+            <button class="btn" onclick="toggleKey(${k.id}, ${k.enabled?0:1})">${k.enabled?"停用":"启用"}</button>
+            <button class="btn danger" onclick="delKey(${k.id})">删除</button>
+          </div>
+        </div>`).join("");
+    }
+    async function createKey() {
+      const slugs = $("key-slugs").value.split(/[\s,]+/).filter(Boolean);
+      const { data } = await api("/admin/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: $("key-name").value,
+          rate_per_min: $("key-rate").value,
+          endpoint_slugs: slugs,
+          ip_allow: $("key-allow").value
+        })
+      });
+      if (!data.ok) { toast(data.error || data.detail); return; }
+      const box = $("key-secret");
+      box.classList.remove("hidden");
+      box.textContent = "只显示一次，立刻复制：\n" + data.data.secret;
+      loadKeys();
+    }
+    async function toggleKey(id, enabled) {
+      await api("/admin/keys/" + id, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled })
+      });
+      loadKeys();
+    }
+    async function delKey(id) {
+      if (!confirm("删除密钥？")) return;
+      await api("/admin/keys/" + id, { method: "DELETE" });
+      loadKeys();
+    }
+    async function loadLogs() {
+      const slug = $("log-slug").value.trim();
+      const { data } = await api("/admin/logs" + (slug ? ("?slug=" + encodeURIComponent(slug)) : ""));
+      if (!data.ok) return;
+      $("log-body").innerHTML = data.data.map(r => `
+        <tr>
+          <td>${r.ts}</td><td>${r.slug||""}</td><td>${r.ip||""}</td>
+          <td>${r.status}</td><td>${r.duration_ms}ms</td><td>${r.error||""}</td>
+          <td><code>${(r.summary||"").slice(0,120)}</code></td>
+        </tr>`).join("");
+    }
+    async function loadSettings() {
+      const { data } = await api("/admin/settings");
+      if (!data.ok) return;
+      $("set-cc").value = data.data.global_concurrency || 8;
+      $("set-deny").value = data.data.ip_deny || "";
+    }
+    async function saveSettings() {
+      const { data } = await api("/admin/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ global_concurrency: $("set-cc").value, ip_deny: $("set-deny").value })
+      });
+      toast(data.ok ? "限制已保存" : (data.error || data.detail));
+    }
+    async function loadDocs() {
+      $("docs-box").textContent = `调用
+POST /api/run/{slug}
+Header: X-API-Key: <你的密钥>
+Body: 任意 JSON，会作为 API_PAYLOAD 和环境 stdin 传给脚本
+
+脚本 stdout 必须是 JSON。
+
+curl 示例
+curl -X POST http://主机:8000/api/run/echo \\
+  -H "X-API-Key: sk_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{"foo":1}'
+
+错误码
+unauthorized / endpoint_disabled / ip_denied / ip_not_allowed
+forbidden_endpoint / rate_limited / busy / timeout
+runtime_missing / invalid_json_output / script_failed / not_found`;
+    }
+    async function refreshAll() {
+      loadOverview();
+      loadEps();
+    }
+    (async () => {
+      const { res } = await api("/admin/me");
+      if (res.ok) { showApp(); refreshAll(); }
+      else showLogin();
+    })();
+  </script>
+</body>
+</html>
