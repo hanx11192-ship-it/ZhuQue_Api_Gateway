@@ -17,6 +17,7 @@ import {
   IconUser,
 } from '@arco-design/web-react/icon'
 import { api } from '../api.js'
+import ErrorBoundary from './ErrorBoundary.jsx'
 import Dashboard from '../pages/Dashboard.jsx'
 import Endpoints from '../pages/Endpoints.jsx'
 import Keys from '../pages/Keys.jsx'
@@ -118,8 +119,9 @@ export default function Layout({ username, onLogout }) {
         </header>
 
         <main className="app-content">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
+          <ErrorBoundary key={location.pathname}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/endpoints" element={<Endpoints />} />
             <Route path="/keys" element={<Keys />} />
@@ -131,7 +133,8 @@ export default function Layout({ username, onLogout }) {
             <Route path="/terminal" element={<Terminal />} />
             <Route path="/system" element={<SystemPage />} />
             <Route path="*" element={<Dashboard />} />
-          </Routes>
+            </Routes>
+          </ErrorBoundary>
         </main>
       </div>
       <Outlet />
