@@ -1,0 +1,26 @@
+# 使用：复制 .env.example 为 .env 后修改，再 `docker compose up -d --build`
+# 默认会把容器 Web(8000) 映射到宿主机 WEB_PORT，SSH(22) 映射到 SSH_PORT
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-python:3.11-slim-bookworm}
+    image: api-gateway:latest
+    container_name: api-gateway
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+      - "${SSH_PORT:-10022}:22"
+    environment:
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      ROOT_PASSWORD: ${ROOT_PASSWORD:-changeme}
+      DB_PATH: /srv/gateway/data/app.db
+      SECRET_FILE: /srv/gateway/data/secret.txt
+      SCRIPTS_DIR: /srv/gateway/data/scripts
+    volumes:
+      - ./data:/srv/gateway/data
