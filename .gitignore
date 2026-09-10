@@ -1,0 +1,40 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- Node / 前端 ----
+node_modules/
+frontend/dist/
+backend/web/dist/
+backend/web/assets/
+
+# ---- 运行时数据（不要入库）----
+data/
+*.db
+*.db-wal
+*.db-shm
+secret.txt
+ssh_keys/
+
+# ---- 环境变量 / 密钥 ----
+.env
+.env.local
+
+# ---- 构建产物 ----
+dist/
+build/
+
+# ---- 预览 / 截图（本地产物，非源码）----
+*.png
+*.jpg
+*.jpeg
+*.log
+
+# ---- 系统 / 编辑器 ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
